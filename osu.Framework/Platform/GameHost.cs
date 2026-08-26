@@ -267,6 +267,16 @@ namespace osu.Framework.Platform
         public InputThread InputThread { get; private set; }
         public AudioThread AudioThread { get; private set; }
 
+        /// <summary>
+        /// Custom per-thread FPS limiters. Only active when <see cref="FrameSync.Unlimited"/> is selected.
+        /// A value of 0 is treated as unlimited.
+        /// </summary>
+        public BindableNumber<double> CustomInputThreadLimit { get; private set; } = null!;
+        public BindableNumber<double> CustomAudioThreadLimit { get; private set; } = null!;
+        public BindableNumber<double> CustomUpdateThreadLimit { get; private set; } = null!;
+        public BindableNumber<double> CustomDrawThreadLimit { get; private set; } = null!;
+        public Bindable<bool> SyncThreadLimits { get; private set; } = null!;
+
         private double maximumUpdateHz = GameThread.DEFAULT_ACTIVE_HZ;
 
         /// <summary>
@@ -1252,6 +1262,18 @@ namespace osu.Framework.Platform
             frameSyncMode = Config.GetBindable<FrameSync>(FrameworkSetting.FrameSync);
             frameSyncMode.ValueChanged += _ => updateFrameSyncMode();
 
+            CustomInputThreadLimit = (BindableNumber<double>)Config.GetBindable<double>(FrameworkSetting.CustomInputThreadLimit);
+            CustomAudioThreadLimit = (BindableNumber<double>)Config.GetBindable<double>(FrameworkSetting.CustomAudioThreadLimit);
+            CustomUpdateThreadLimit = (BindableNumber<double>)Config.GetBindable<double>(FrameworkSetting.CustomUpdateThreadLimit);
+            CustomDrawThreadLimit = (BindableNumber<double>)Config.GetBindable<double>(FrameworkSetting.CustomDrawThreadLimit);
+            SyncThreadLimits = Config.GetBindable<bool>(FrameworkSetting.SyncThreadLimits);
+
+            CustomInputThreadLimit.ValueChanged += _ => updateFrameSyncMode();
+            CustomAudioThreadLimit.ValueChanged += _ => updateFrameSyncMode();
+            CustomUpdateThreadLimit.ValueChanged += _ => updateFrameSyncMode();
+            CustomDrawThreadLimit.ValueChanged += _ => updateFrameSyncMode();
+            SyncThreadLimits.ValueChanged += _ => updateFrameSyncMode();
+
 #pragma warning disable 618
             // pragma region can be removed 20210911
             ignoredInputHandlers = Config.GetBindable<string>(FrameworkSetting.IgnoredInputHandlers);
@@ -1366,6 +1388,29 @@ namespace osu.Framework.Platform
                     drawLimiter = int.MaxValue;
                     updateLimiter = int.MaxValue;
                     break;
+
+                case FrameSync.Custom:
+                    // Apply custom per-thread limits.
+                    // A value of 0 is treated as unlimited (double.MaxValue).
+                    double inputLimit = CustomInputThreadLimit.Value;
+                    double audioLimit = CustomAudioThreadLimit.Value;
+                    double updateLimit = CustomUpdateThreadLimit.Value;
+                    double drawLimit = CustomDrawThreadLimit.Value;
+
+                    if (SyncThreadLimits.Value)
+                    {
+                        audioLimit = inputLimit;
+                        updateLimit = inputLimit;
+                        drawLimit = inputLimit;
+                    }
+
+                    AudioThread.ActiveHz = audioLimit <= 0 ? double.MaxValue : audioLimit;
+                    MaximumDrawHz = drawLimit <= 0 ? double.MaxValue : drawLimit;
+                    MaximumUpdateHz = updateLimit <= 0 ? double.MaxValue : updateLimit;
+
+                    // Must be done last — the host schedules a task to reset the input thread limiter when mutating MaximumUpdateHz.
+                    InputThread.ActiveHz = inputLimit <= 0 ? double.MaxValue : inputLimit;
+                    return;
             }
 
             if (!AllowBenchmarkUnlimitedFrames)
