@@ -45,12 +45,6 @@ namespace osu.Framework.Configuration
             SetDefault(FrameworkSetting.ShowUnicode, false);
             SetDefault(FrameworkSetting.Locale, string.Empty);
 
-            SetDefault(FrameworkSetting.CustomInputThreadLimit, 1000.0, 0.0, 8000.0, 1.0);
-            SetDefault(FrameworkSetting.CustomAudioThreadLimit, 1000.0, 0.0, 8000.0, 1.0);
-            SetDefault(FrameworkSetting.CustomUpdateThreadLimit, 1000.0, 0.0, 8000.0, 1.0);
-            SetDefault(FrameworkSetting.CustomDrawThreadLimit, 1000.0, 0.0, 8000.0, 1.0);
-            SetDefault(FrameworkSetting.SyncThreadLimits, false);
-
 #pragma warning disable 618
             SetDefault(FrameworkSetting.MapAbsoluteInputToWindow, false);
             SetDefault(FrameworkSetting.IgnoredInputHandlers, string.Empty);
@@ -61,6 +55,18 @@ namespace osu.Framework.Configuration
         public FrameworkConfigManager(Storage storage, IDictionary<FrameworkSetting, object> defaultOverrides = null)
             : base(storage, defaultOverrides)
         {
+        }
+
+        protected override string GetSaveStringRepresentation(FrameworkSetting lookup, string value)
+        {
+            // FrameSync.Custom is a runtime-only value in this fork. Persisting it to framework.ini would make the
+            // file unparseable for official builds (which do not know the value), so it is written back as Unlimited
+            // instead. Whether the custom limiter is actually active is persisted separately by the game in its own
+            // config file (see CustomFrameLimiterConfigManager in osu.Game).
+            if (lookup == FrameworkSetting.FrameSync && value == nameof(FrameSync.Custom))
+                return nameof(FrameSync.Unlimited);
+
+            return base.GetSaveStringRepresentation(lookup, value);
         }
 
         public override TrackedSettings CreateTrackedSettings() => new TrackedSettings
@@ -122,11 +128,5 @@ namespace osu.Framework.Configuration
 
         [Obsolete("Input-related settings are now stored in InputConfigManager. Adjustments should be made via Host.AvailableInputHandlers bindables directly.")] // can be removed 20210911
         MapAbsoluteInputToWindow,
-
-        CustomInputThreadLimit,
-        CustomAudioThreadLimit,
-        CustomUpdateThreadLimit,
-        CustomDrawThreadLimit,
-        SyncThreadLimits,
     }
 }

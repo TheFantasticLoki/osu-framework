@@ -91,7 +91,7 @@ namespace osu.Framework.Configuration
                 using (var w = new StreamWriter(stream))
                 {
                     foreach (var p in ConfigStore)
-                        w.WriteLine(@"{0} = {1}", p.Key, p.Value.ToString(CultureInfo.InvariantCulture).AsNonNull().Replace("\n", "").Replace("\r", ""));
+                        w.WriteLine(@"{0} = {1}", p.Key, GetSaveStringRepresentation(p.Key, p.Value.ToString(CultureInfo.InvariantCulture).AsNonNull().Replace("\n", "").Replace("\r", "")));
                 }
             }
             catch
@@ -101,5 +101,13 @@ namespace osu.Framework.Configuration
 
             return true;
         }
+
+        /// <summary>
+        /// Allows adjusting the string representation of a value before it is written to disk, without affecting the in-memory value.
+        /// </summary>
+        /// <param name="lookup">The lookup key being written.</param>
+        /// <param name="value">The string representation of the current value.</param>
+        /// <returns>The string representation to write to disk.</returns>
+        protected virtual string GetSaveStringRepresentation(TLookup lookup, string value) => value;
     }
 }
